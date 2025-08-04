@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 
 export const updateMessageStatus = async (input: UpdateMessageStatusInput): Promise<Message> => {
   try {
-    // Update message status and updated_at timestamp
+    // Update message status and return the updated record
     const result = await db.update(messagesTable)
       .set({
         status: input.status,
@@ -16,7 +16,7 @@ export const updateMessageStatus = async (input: UpdateMessageStatusInput): Prom
       .returning()
       .execute();
 
-    if (result.length === 0) {
+    if (!result || result.length === 0) {
       throw new Error(`Message with id ${input.id} not found`);
     }
 

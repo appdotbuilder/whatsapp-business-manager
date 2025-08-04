@@ -6,7 +6,7 @@ import { usersTable } from '../db/schema';
 import { type LoginInput, type CreateUserInput } from '../schema';
 import { loginUser } from '../handlers/login_user';
 
-// Test user data
+// Test data
 const testUser: CreateUserInput = {
   email: 'test@example.com',
   password: 'testpassword123',
@@ -14,16 +14,26 @@ const testUser: CreateUserInput = {
   last_name: 'Doe'
 };
 
-const loginInput: LoginInput = {
+const validLoginInput: LoginInput = {
   email: 'test@example.com',
   password: 'testpassword123'
+};
+
+const invalidEmailInput: LoginInput = {
+  email: 'nonexistent@example.com',
+  password: 'testpassword123'
+};
+
+const invalidPasswordInput: LoginInput = {
+  email: 'test@example.com',
+  password: 'wrongpassword'
 };
 
 describe('loginUser', () => {
   beforeEach(createDB);
   afterEach(resetDB);
 
-  it('should return user when credentials are valid', async () => {
+  it('should return user for valid credentials', async () => {
     // Create test user first
     await db.insert(usersTable)
       .values({
@@ -34,7 +44,7 @@ describe('loginUser', () => {
       })
       .execute();
 
-    const result = await loginUser(loginInput);
+    const result = await loginUser(validLoginInput);
 
     expect(result).not.toBeNull();
     expect(result!.email).toEqual('test@example.com');
@@ -45,16 +55,7 @@ describe('loginUser', () => {
     expect(result!.updated_at).toBeInstanceOf(Date);
   });
 
-  it('should return null when user does not exist', async () => {
-    const result = await loginUser({
-      email: 'nonexistent@example.com',
-      password: 'anypassword'
-    });
-
-    expect(result).toBeNull();
-  });
-
-  it('should return null when password is incorrect', async () => {
+  it('should return null for invalid email', async () => {
     // Create test user first
     await db.insert(usersTable)
       .values({
@@ -65,15 +66,12 @@ describe('loginUser', () => {
       })
       .execute();
 
-    const result = await loginUser({
-      email: 'test@example.com',
-      password: 'wrongpassword'
-    });
+    const result = await loginUser(invalidEmailInput);
 
     expect(result).toBeNull();
   });
 
-  it('should return null when email exists but password is empty', async () => {
+  it('should return null for invalid password', async () => {
     // Create test user first
     await db.insert(usersTable)
       .values({
@@ -84,10 +82,13 @@ describe('loginUser', () => {
       })
       .execute();
 
-    const result = await loginUser({
-      email: 'test@example.com',
-      password: ''
-    });
+    const result = await loginUser(invalidPasswordInput);
+
+    expect(result).toBeNull();
+  });
+
+  it('should return null when no users exist', async () => {
+    const result = await loginUser(validLoginInput);
 
     expect(result).toBeNull();
   });

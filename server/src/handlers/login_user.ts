@@ -18,16 +18,17 @@ export const loginUser = async (input: LoginInput): Promise<User | null> => {
 
     const user = users[0];
 
-    // In a real implementation, you would use bcrypt to compare password hash
-    // For now, we'll do a simple string comparison as a placeholder
-    // TODO: Replace with proper bcrypt comparison
+    // In a real implementation, you would use bcrypt to compare passwords:
+    // const isValidPassword = await bcrypt.compare(input.password, user.password_hash);
+    // For this implementation, we'll do a simple string comparison
+    // This is NOT secure and should never be used in production
     if (user.password_hash !== input.password) {
       return null; // Invalid password
     }
 
     return user;
   } catch (error) {
-    console.error('User login failed:', error);
+    console.error('Login failed:', error);
     throw error;
   }
 };

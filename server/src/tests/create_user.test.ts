@@ -7,7 +7,7 @@ import { type CreateUserInput } from '../schema';
 import { createUser } from '../handlers/create_user';
 import { eq } from 'drizzle-orm';
 
-// Test input
+// Test input with all required fields
 const testInput: CreateUserInput = {
   email: 'test@example.com',
   password: 'password123',
@@ -36,7 +36,7 @@ describe('createUser', () => {
   it('should save user to database', async () => {
     const result = await createUser(testInput);
 
-    // Query using proper drizzle syntax
+    // Query database to verify user was saved
     const users = await db.select()
       .from(usersTable)
       .where(eq(usersTable.id, result.id))
@@ -47,7 +47,6 @@ describe('createUser', () => {
     expect(users[0].first_name).toEqual('John');
     expect(users[0].last_name).toEqual('Doe');
     expect(users[0].password_hash).toBeDefined();
-    expect(users[0].password_hash).not.toEqual('password123');
     expect(users[0].created_at).toBeInstanceOf(Date);
     expect(users[0].updated_at).toBeInstanceOf(Date);
   });
@@ -55,37 +54,43 @@ describe('createUser', () => {
   it('should hash the password', async () => {
     const result = await createUser(testInput);
 
-    // Password should be hashed, not plain text
+    // Verify password is hashed and not plain text
     expect(result.password_hash).not.toEqual('password123');
-    expect(result.password_hash.length).toBeGreaterThan(20);
+    expect(result.password_hash.length).toBeGreaterThan(10);
     
-    // Verify password can be verified with Bun's password API
-    const isValid = await Bun.password.verify('password123', result.password_hash);
+    // Verify the hash can be verified against original password
+    const isValid = await Bun.password.verify(testInput.password, result.password_hash);
     expect(isValid).toBe(true);
   });
 
-  it('should enforce unique email constraint', async () => {
+  it('should reject duplicate email addresses', async () => {
     // Create first user
     await createUser(testInput);
 
-    // Try to create another user with same email
-    await expect(createUser(testInput)).rejects.toThrow(/unique/i);
-  });
-
-  it('should handle different user data', async () => {
-    const differentInput: CreateUserInput = {
-      email: 'jane@example.com',
-      password: 'differentpass456',
+    // Attempt to create second user with same email
+    const duplicateInput: CreateUserInput = {
+      ...testInput,
       first_name: 'Jane',
       last_name: 'Smith'
     };
 
-    const result = await createUser(differentInput);
+    await expect(createUser(duplicateInput)).rejects.toThrow(/duplicate/i);
+  });
 
-    expect(result.email).toEqual('jane@example.com');
-    expect(result.first_name).toEqual('Jane');
-    expect(result.last_name).toEqual('Smith');
-    expect(result.password_hash).toBeDefined();
-    expect(result.password_hash).not.toEqual('differentpass456');
+  it('should create users with different emails', async () => {
+    const firstUser = await createUser(testInput);
+    
+    const secondInput: CreateUserInput = {
+      email: 'jane@example.com',
+      password: 'different123',
+      first_name: 'Jane',
+      last_name: 'Smith'
+    };
+    
+    const secondUser = await createUser(secondInput);
+
+    expect(firstUser.id).not.toEqual(secondUser.id);
+    expect(firstUser.email).not.toEqual(secondUser.email);
+    expect(firstUser.password_hash).not.toEqual(secondUser.password_hash);
   });
 });

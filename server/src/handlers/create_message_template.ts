@@ -19,7 +19,7 @@ export const createMessageTemplate = async (input: CreateMessageTemplateInput): 
     const messageTemplate = result[0];
     return {
       ...messageTemplate,
-      variables: messageTemplate.variables as string[] | null // Cast jsonb back to proper type
+      variables: messageTemplate.variables as string[] | null // Type assertion for JSONB field
     };
   } catch (error) {
     console.error('Message template creation failed:', error);

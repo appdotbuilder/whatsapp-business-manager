@@ -7,7 +7,7 @@ import { type CreateMessageTemplateInput } from '../schema';
 import { createMessageTemplate } from '../handlers/create_message_template';
 import { eq } from 'drizzle-orm';
 
-// Test user for foreign key constraints
+// Test user data
 const testUser = {
   email: 'test@example.com',
   password_hash: 'hashed_password',
@@ -15,124 +15,100 @@ const testUser = {
   last_name: 'User'
 };
 
-// Simple test input without variables
-const testInput: CreateMessageTemplateInput = {
-  user_id: 1, // Will be set after user creation
-  name: 'Welcome Template',
-  content: 'Welcome to our service! How can we help you today?'
-};
-
 // Test input with variables
 const testInputWithVariables: CreateMessageTemplateInput = {
-  user_id: 1, // Will be set after user creation
-  name: 'Personalized Welcome',
-  content: 'Hello {{firstName}}, welcome to {{serviceName}}!',
-  variables: ['firstName', 'serviceName']
+  user_id: 1,
+  name: 'Welcome Template',
+  content: 'Hello {{name}}, welcome to our service! Your account {{account_id}} is now active.',
+  variables: ['name', 'account_id']
+};
+
+// Test input without variables
+const testInputWithoutVariables: CreateMessageTemplateInput = {
+  user_id: 1,
+  name: 'Simple Template',
+  content: 'Thank you for your purchase!'
 };
 
 describe('createMessageTemplate', () => {
   beforeEach(async () => {
     await createDB();
     
-    // Create test user for foreign key constraint
-    const userResult = await db.insert(usersTable)
+    // Create test user
+    await db.insert(usersTable)
       .values(testUser)
-      .returning()
       .execute();
-    
-    const userId = userResult[0].id;
-    testInput.user_id = userId;
-    testInputWithVariables.user_id = userId;
   });
 
   afterEach(resetDB);
-
-  it('should create a message template without variables', async () => {
-    const result = await createMessageTemplate(testInput);
-
-    // Basic field validation
-    expect(result.name).toEqual('Welcome Template');
-    expect(result.content).toEqual('Welcome to our service! How can we help you today?');
-    expect(result.user_id).toEqual(testInput.user_id);
-    expect(result.variables).toBeNull();
-    expect(result.id).toBeDefined();
-    expect(result.created_at).toBeInstanceOf(Date);
-    expect(result.updated_at).toBeInstanceOf(Date);
-  });
 
   it('should create a message template with variables', async () => {
     const result = await createMessageTemplate(testInputWithVariables);
 
     // Basic field validation
-    expect(result.name).toEqual('Personalized Welcome');
-    expect(result.content).toEqual('Hello {{firstName}}, welcome to {{serviceName}}!');
-    expect(result.user_id).toEqual(testInputWithVariables.user_id);
-    expect(result.variables).toEqual(['firstName', 'serviceName']);
+    expect(result.name).toEqual('Welcome Template');
+    expect(result.content).toEqual(testInputWithVariables.content);
+    expect(result.variables).toEqual(['name', 'account_id']);
+    expect(result.user_id).toEqual(1);
+    expect(result.id).toBeDefined();
+    expect(result.created_at).toBeInstanceOf(Date);
+    expect(result.updated_at).toBeInstanceOf(Date);
+  });
+
+  it('should create a message template without variables', async () => {
+    const result = await createMessageTemplate(testInputWithoutVariables);
+
+    // Basic field validation
+    expect(result.name).toEqual('Simple Template');
+    expect(result.content).toEqual('Thank you for your purchase!');
+    expect(result.variables).toBeNull();
+    expect(result.user_id).toEqual(1);
     expect(result.id).toBeDefined();
     expect(result.created_at).toBeInstanceOf(Date);
     expect(result.updated_at).toBeInstanceOf(Date);
   });
 
   it('should save message template to database', async () => {
-    const result = await createMessageTemplate(testInput);
-
-    // Query using proper drizzle syntax
-    const messageTemplates = await db.select()
-      .from(messageTemplatesTable)
-      .where(eq(messageTemplatesTable.id, result.id))
-      .execute();
-
-    expect(messageTemplates).toHaveLength(1);
-    expect(messageTemplates[0].name).toEqual('Welcome Template');
-    expect(messageTemplates[0].content).toEqual(testInput.content);
-    expect(messageTemplates[0].user_id).toEqual(testInput.user_id);
-    expect(messageTemplates[0].variables).toBeNull();
-    expect(messageTemplates[0].created_at).toBeInstanceOf(Date);
-    expect(messageTemplates[0].updated_at).toBeInstanceOf(Date);
-  });
-
-  it('should save message template with variables to database', async () => {
     const result = await createMessageTemplate(testInputWithVariables);
 
-    // Query the database
-    const messageTemplates = await db.select()
+    // Query using proper drizzle syntax
+    const templates = await db.select()
       .from(messageTemplatesTable)
       .where(eq(messageTemplatesTable.id, result.id))
       .execute();
 
-    expect(messageTemplates).toHaveLength(1);
-    expect(messageTemplates[0].name).toEqual('Personalized Welcome');
-    expect(messageTemplates[0].content).toEqual(testInputWithVariables.content);
-    expect(messageTemplates[0].user_id).toEqual(testInputWithVariables.user_id);
-    expect(messageTemplates[0].variables).toEqual(['firstName', 'serviceName']);
+    expect(templates).toHaveLength(1);
+    expect(templates[0].name).toEqual('Welcome Template');
+    expect(templates[0].content).toEqual(testInputWithVariables.content);
+    expect(templates[0].variables).toEqual(['name', 'account_id']);
+    expect(templates[0].user_id).toEqual(1);
+    expect(templates[0].created_at).toBeInstanceOf(Date);
+    expect(templates[0].updated_at).toBeInstanceOf(Date);
   });
 
-  it('should handle null variables when none provided', async () => {
-    const inputWithoutVariables = {
-      user_id: testInput.user_id,
-      name: 'Simple Template',
-      content: 'This is a simple message without variables'
+  it('should handle empty variables array', async () => {
+    const inputWithEmptyVariables: CreateMessageTemplateInput = {
+      user_id: 1,
+      name: 'Empty Variables Template',
+      content: 'Static message content',
+      variables: []
     };
 
-    const result = await createMessageTemplate(inputWithoutVariables);
+    const result = await createMessageTemplate(inputWithEmptyVariables);
 
-    expect(result.variables).toBeNull();
-
-    // Verify in database
-    const messageTemplates = await db.select()
-      .from(messageTemplatesTable)
-      .where(eq(messageTemplatesTable.id, result.id))
-      .execute();
-
-    expect(messageTemplates[0].variables).toBeNull();
+    expect(result.variables).toEqual([]);
+    expect(result.name).toEqual('Empty Variables Template');
+    expect(result.content).toEqual('Static message content');
   });
 
-  it('should throw error for non-existent user_id', async () => {
-    const invalidInput = {
-      ...testInput,
-      user_id: 99999 // Non-existent user ID
+  it('should fail when user does not exist', async () => {
+    const inputWithInvalidUser: CreateMessageTemplateInput = {
+      user_id: 999, // Non-existent user
+      name: 'Test Template',
+      content: 'Test content'
     };
 
-    await expect(createMessageTemplate(invalidInput)).rejects.toThrow(/violates foreign key constraint/i);
+    await expect(createMessageTemplate(inputWithInvalidUser))
+      .rejects.toThrow(/violates foreign key constraint/i);
   });
 });

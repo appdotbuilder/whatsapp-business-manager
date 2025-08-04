@@ -6,49 +6,27 @@ import { eq, and, desc } from 'drizzle-orm';
 
 export async function getChatMessages(input: GetChatMessagesInput): Promise<Message[]> {
   try {
-    const whereConditions = and(
-      eq(messagesTable.user_id, input.user_id),
-      eq(messagesTable.contact_id, input.contact_id)
-    );
+    // Build the complete query in one chain
+    const limit = input.limit || 50;
+    const offset = input.offset || 0;
 
-    // Handle different pagination scenarios separately to avoid TypeScript issues
-    let results: Message[];
+    const results = await db.select()
+      .from(messagesTable)
+      .where(and(
+        eq(messagesTable.user_id, input.user_id),
+        eq(messagesTable.contact_id, input.contact_id)
+      ))
+      .orderBy(desc(messagesTable.created_at))
+      .limit(limit)
+      .offset(offset)
+      .execute();
 
-    if (input.limit !== undefined && input.offset !== undefined) {
-      // Both limit and offset provided
-      results = await db.select()
-        .from(messagesTable)
-        .where(whereConditions)
-        .orderBy(desc(messagesTable.created_at))
-        .limit(input.limit)
-        .offset(input.offset)
-        .execute();
-    } else if (input.limit !== undefined) {
-      // Only limit provided
-      results = await db.select()
-        .from(messagesTable)
-        .where(whereConditions)
-        .orderBy(desc(messagesTable.created_at))
-        .limit(input.limit)
-        .execute();
-    } else if (input.offset !== undefined) {
-      // Only offset provided
-      results = await db.select()
-        .from(messagesTable)
-        .where(whereConditions)
-        .orderBy(desc(messagesTable.created_at))
-        .offset(input.offset)
-        .execute();
-    } else {
-      // No pagination
-      results = await db.select()
-        .from(messagesTable)
-        .where(whereConditions)
-        .orderBy(desc(messagesTable.created_at))
-        .execute();
-    }
-
-    return results;
+    // Return messages with proper types
+    return results.map(message => ({
+      ...message,
+      created_at: message.created_at,
+      updated_at: message.updated_at
+    }));
   } catch (error) {
     console.error('Get chat messages failed:', error);
     throw error;

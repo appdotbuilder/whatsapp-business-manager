@@ -16,16 +16,23 @@ const testUser: CreateUserInput = {
 
 const testTemplate1: CreateMessageTemplateInput = {
   user_id: 1,
-  name: 'Welcome Template',
+  name: 'Welcome Message',
   content: 'Hello {{name}}, welcome to our service!',
   variables: ['name']
 };
 
 const testTemplate2: CreateMessageTemplateInput = {
   user_id: 1,
-  name: 'Reminder Template',
-  content: 'Hi {{name}}, this is a reminder about {{event}} on {{date}}.',
-  variables: ['name', 'event', 'date']
+  name: 'Reminder',
+  content: 'Don\'t forget your appointment on {{date}} at {{time}}.',
+  variables: ['date', 'time']
+};
+
+const testTemplate3: CreateMessageTemplateInput = {
+  user_id: 2,
+  name: 'Other User Template',
+  content: 'This belongs to another user.',
+  variables: null
 };
 
 describe('getMessageTemplates', () => {
@@ -33,129 +40,192 @@ describe('getMessageTemplates', () => {
   afterEach(resetDB);
 
   it('should return empty array when user has no templates', async () => {
-    // Create user first
-    await db.insert(usersTable).values({
-      email: testUser.email,
-      password_hash: 'hashed_password',
-      first_name: testUser.first_name,
-      last_name: testUser.last_name
-    }).execute();
+    // Create user but no templates
+    await db.insert(usersTable)
+      .values({
+        email: testUser.email,
+        password_hash: 'hashed_password',
+        first_name: testUser.first_name,
+        last_name: testUser.last_name
+      })
+      .execute();
 
     const result = await getMessageTemplates(1);
 
-    expect(result).toEqual([]);
+    expect(result).toHaveLength(0);
   });
 
-  it('should return all templates for a user ordered by creation date', async () => {
-    // Create user first
-    await db.insert(usersTable).values({
-      email: testUser.email,
-      password_hash: 'hashed_password',
-      first_name: testUser.first_name,
-      last_name: testUser.last_name
-    }).execute();
+  it('should return templates for specific user only', async () => {
+    // Create users
+    await db.insert(usersTable)
+      .values([
+        {
+          email: testUser.email,
+          password_hash: 'hashed_password',
+          first_name: testUser.first_name,
+          last_name: testUser.last_name
+        },
+        {
+          email: 'other@example.com',
+          password_hash: 'hashed_password',
+          first_name: 'Other',
+          last_name: 'User'
+        }
+      ])
+      .execute();
 
-    // Create templates with slight delay to ensure different timestamps
-    await db.insert(messageTemplatesTable).values({
-      user_id: testTemplate1.user_id,
-      name: testTemplate1.name,
-      content: testTemplate1.content,
-      variables: testTemplate1.variables
-    }).execute();
+    // Create templates for both users
+    await db.insert(messageTemplatesTable)
+      .values([
+        {
+          user_id: testTemplate1.user_id,
+          name: testTemplate1.name,
+          content: testTemplate1.content,
+          variables: JSON.stringify(testTemplate1.variables)
+        },
+        {
+          user_id: testTemplate2.user_id,
+          name: testTemplate2.name,
+          content: testTemplate2.content,
+          variables: JSON.stringify(testTemplate2.variables)
+        },
+        {
+          user_id: testTemplate3.user_id,
+          name: testTemplate3.name,
+          content: testTemplate3.content,
+          variables: testTemplate3.variables
+        }
+      ])
+      .execute();
 
-    // Add delay to ensure different created_at timestamps
+    const result = await getMessageTemplates(1);
+
+    expect(result).toHaveLength(2);
+    expect(result.every(template => template.user_id === 1)).toBe(true);
+    
+    // Verify correct templates are returned
+    const templateNames = result.map(t => t.name);
+    expect(templateNames).toContain('Welcome Message');
+    expect(templateNames).toContain('Reminder');
+    expect(templateNames).not.toContain('Other User Template');
+  });
+
+  it('should return templates ordered by creation date descending', async () => {
+    // Create user
+    await db.insert(usersTable)
+      .values({
+        email: testUser.email,
+        password_hash: 'hashed_password',
+        first_name: testUser.first_name,
+        last_name: testUser.last_name
+      })
+      .execute();
+
+    // Create templates with small delay to ensure different timestamps
+    await db.insert(messageTemplatesTable)
+      .values({
+        user_id: testTemplate1.user_id,
+        name: testTemplate1.name,
+        content: testTemplate1.content,
+        variables: JSON.stringify(testTemplate1.variables)
+      })
+      .execute();
+
+    // Small delay to ensure different created_at timestamps
     await new Promise(resolve => setTimeout(resolve, 10));
 
-    await db.insert(messageTemplatesTable).values({
-      user_id: testTemplate2.user_id,
-      name: testTemplate2.name,
-      content: testTemplate2.content,
-      variables: testTemplate2.variables
-    }).execute();
+    await db.insert(messageTemplatesTable)
+      .values({
+        user_id: testTemplate2.user_id,
+        name: testTemplate2.name,
+        content: testTemplate2.content,
+        variables: JSON.stringify(testTemplate2.variables)
+      })
+      .execute();
 
     const result = await getMessageTemplates(1);
 
     expect(result).toHaveLength(2);
     
-    // Verify templates are ordered by creation date (newest first)
-    expect(result[0].name).toBe('Reminder Template');
-    expect(result[1].name).toBe('Welcome Template');
-    
-    // Verify first template
-    expect(result[0].content).toBe('Hi {{name}}, this is a reminder about {{event}} on {{date}}.');
-    expect(result[0].variables).toEqual(['name', 'event', 'date']);
-    expect(result[0].user_id).toBe(1);
-    expect(result[0].id).toBeDefined();
-    expect(result[0].created_at).toBeInstanceOf(Date);
-    expect(result[0].updated_at).toBeInstanceOf(Date);
-
-    // Verify second template
-    expect(result[1].content).toBe('Hello {{name}}, welcome to our service!');
-    expect(result[1].variables).toEqual(['name']);
-    expect(result[1].user_id).toBe(1);
+    // Should be ordered by created_at descending (newest first)
+    expect(result[0].created_at.getTime()).toBeGreaterThanOrEqual(result[1].created_at.getTime());
+    expect(result[0].name).toBe('Reminder'); // Created second, should be first
+    expect(result[1].name).toBe('Welcome Message'); // Created first, should be second
   });
 
-  it('should only return templates for the specified user', async () => {
-    // Create two users
-    await db.insert(usersTable).values([
-      {
+  it('should correctly handle variables field', async () => {
+    // Create user
+    await db.insert(usersTable)
+      .values({
         email: testUser.email,
         password_hash: 'hashed_password',
         first_name: testUser.first_name,
         last_name: testUser.last_name
-      },
-      {
-        email: 'user2@example.com',
-        password_hash: 'hashed_password2',
-        first_name: 'User',
-        last_name: 'Two'
-      }
-    ]).execute();
+      })
+      .execute();
 
-    // Create templates for both users
-    await db.insert(messageTemplatesTable).values([
-      {
-        user_id: 1,
-        name: 'User 1 Template',
-        content: 'Template for user 1',
-        variables: null
-      },
-      {
-        user_id: 2,
-        name: 'User 2 Template',
-        content: 'Template for user 2',
-        variables: null
-      }
-    ]).execute();
+    // Create templates with different variable configurations
+    await db.insert(messageTemplatesTable)
+      .values([
+        {
+          user_id: testTemplate1.user_id,
+          name: testTemplate1.name,
+          content: testTemplate1.content,
+          variables: JSON.stringify(testTemplate1.variables) // Array of strings
+        },
+        {
+          user_id: 1,
+          name: 'No Variables Template',
+          content: 'Simple message with no variables.',
+          variables: null // Null variables
+        }
+      ])
+      .execute();
 
     const result = await getMessageTemplates(1);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('User 1 Template');
-    expect(result[0].user_id).toBe(1);
+    expect(result).toHaveLength(2);
+    
+    // Find templates by name
+    const withVariables = result.find(t => t.name === 'Welcome Message');
+    const withoutVariables = result.find(t => t.name === 'No Variables Template');
+
+    expect(withVariables?.variables).toEqual(['name']);
+    expect(withoutVariables?.variables).toBeNull();
   });
 
-  it('should handle templates with null variables', async () => {
-    // Create user first
-    await db.insert(usersTable).values({
-      email: testUser.email,
-      password_hash: 'hashed_password',
-      first_name: testUser.first_name,
-      last_name: testUser.last_name
-    }).execute();
+  it('should include all required fields', async () => {
+    // Create user
+    await db.insert(usersTable)
+      .values({
+        email: testUser.email,
+        password_hash: 'hashed_password',
+        first_name: testUser.first_name,
+        last_name: testUser.last_name
+      })
+      .execute();
 
-    // Create template with null variables
-    await db.insert(messageTemplatesTable).values({
-      user_id: 1,
-      name: 'Simple Template',
-      content: 'This is a simple message with no variables.',
-      variables: null
-    }).execute();
+    // Create template
+    await db.insert(messageTemplatesTable)
+      .values({
+        user_id: testTemplate1.user_id,
+        name: testTemplate1.name,
+        content: testTemplate1.content,
+        variables: JSON.stringify(testTemplate1.variables)
+      })
+      .execute();
 
     const result = await getMessageTemplates(1);
 
     expect(result).toHaveLength(1);
-    expect(result[0].name).toBe('Simple Template');
-    expect(result[0].variables).toBeNull();
+    
+    const template = result[0];
+    expect(template.id).toBeDefined();
+    expect(template.user_id).toBe(1);
+    expect(template.name).toBe('Welcome Message');
+    expect(template.content).toBe('Hello {{name}}, welcome to our service!');
+    expect(template.variables).toEqual(['name']);
+    expect(template.created_at).toBeInstanceOf(Date);
+    expect(template.updated_at).toBeInstanceOf(Date);
   });
 });

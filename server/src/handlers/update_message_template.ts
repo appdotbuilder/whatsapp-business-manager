@@ -7,21 +7,22 @@ import { eq } from 'drizzle-orm';
 export const updateMessageTemplate = async (input: UpdateMessageTemplateInput): Promise<MessageTemplate> => {
   try {
     // Build update object with only provided fields
-    const updateData: any = {
-      updated_at: new Date()
-    };
-
+    const updateData: any = {};
+    
     if (input.name !== undefined) {
       updateData.name = input.name;
     }
-
+    
     if (input.content !== undefined) {
       updateData.content = input.content;
     }
-
+    
     if (input.variables !== undefined) {
       updateData.variables = input.variables;
     }
+    
+    // Always update the updated_at timestamp
+    updateData.updated_at = new Date();
 
     // Update the message template
     const result = await db.update(messageTemplatesTable)
@@ -34,7 +35,7 @@ export const updateMessageTemplate = async (input: UpdateMessageTemplateInput): 
       throw new Error(`Message template with id ${input.id} not found`);
     }
 
-    // Convert the database result to the expected schema type
+    // Return with proper type casting for variables field
     const template = result[0];
     return {
       ...template,

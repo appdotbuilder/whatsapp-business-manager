@@ -11,11 +11,11 @@ describe('updateMessageTemplate', () => {
   beforeEach(createDB);
   afterEach(resetDB);
 
-  let userId: number;
-  let templateId: number;
+  let testUserId: number;
+  let testTemplateId: number;
 
   beforeEach(async () => {
-    // Create a user first
+    // Create test user
     const userResult = await db.insert(usersTable)
       .values({
         email: 'test@example.com',
@@ -25,84 +25,86 @@ describe('updateMessageTemplate', () => {
       })
       .returning()
       .execute();
-    userId = userResult[0].id;
 
-    // Create a message template
+    testUserId = userResult[0].id;
+
+    // Create test message template
     const templateResult = await db.insert(messageTemplatesTable)
       .values({
-        user_id: userId,
+        user_id: testUserId,
         name: 'Original Template',
-        content: 'Original content with {name}',
+        content: 'Hello {{name}}, welcome!',
         variables: ['name']
       })
       .returning()
       .execute();
-    templateId = templateResult[0].id;
+
+    testTemplateId = templateResult[0].id;
   });
 
-  it('should update message template name', async () => {
+  it('should update template name', async () => {
     const input: UpdateMessageTemplateInput = {
-      id: templateId,
+      id: testTemplateId,
       name: 'Updated Template Name'
     };
 
     const result = await updateMessageTemplate(input);
 
-    expect(result.id).toEqual(templateId);
+    expect(result.id).toEqual(testTemplateId);
     expect(result.name).toEqual('Updated Template Name');
-    expect(result.content).toEqual('Original content with {name}');
-    expect(result.variables).toEqual(['name']);
+    expect(result.content).toEqual('Hello {{name}}, welcome!'); // Should remain unchanged
+    expect(result.variables).toEqual(['name']); // Should remain unchanged
     expect(result.updated_at).toBeInstanceOf(Date);
   });
 
-  it('should update message template content', async () => {
+  it('should update template content', async () => {
     const input: UpdateMessageTemplateInput = {
-      id: templateId,
-      content: 'Updated content with {first_name} and {last_name}'
+      id: testTemplateId,
+      content: 'Hi {{firstName}}, thanks for joining us!'
     };
 
     const result = await updateMessageTemplate(input);
 
-    expect(result.id).toEqual(templateId);
-    expect(result.name).toEqual('Original Template');
-    expect(result.content).toEqual('Updated content with {first_name} and {last_name}');
-    expect(result.variables).toEqual(['name']);
+    expect(result.id).toEqual(testTemplateId);
+    expect(result.name).toEqual('Original Template'); // Should remain unchanged
+    expect(result.content).toEqual('Hi {{firstName}}, thanks for joining us!');
+    expect(result.variables).toEqual(['name']); // Should remain unchanged
   });
 
-  it('should update message template variables', async () => {
+  it('should update template variables', async () => {
     const input: UpdateMessageTemplateInput = {
-      id: templateId,
-      variables: ['first_name', 'last_name', 'company']
+      id: testTemplateId,
+      variables: ['firstName', 'lastName']
     };
 
     const result = await updateMessageTemplate(input);
 
-    expect(result.id).toEqual(templateId);
-    expect(result.name).toEqual('Original Template');
-    expect(result.content).toEqual('Original content with {name}');
-    expect(result.variables).toEqual(['first_name', 'last_name', 'company']);
+    expect(result.id).toEqual(testTemplateId);
+    expect(result.name).toEqual('Original Template'); // Should remain unchanged
+    expect(result.content).toEqual('Hello {{name}}, welcome!'); // Should remain unchanged
+    expect(result.variables).toEqual(['firstName', 'lastName']);
   });
 
   it('should update multiple fields at once', async () => {
     const input: UpdateMessageTemplateInput = {
-      id: templateId,
-      name: 'Completely Updated Template',
-      content: 'New content with {customer_name}',
-      variables: ['customer_name']
+      id: testTemplateId,
+      name: 'Welcome Message',
+      content: 'Welcome {{firstName}} {{lastName}}!',
+      variables: ['firstName', 'lastName']
     };
 
     const result = await updateMessageTemplate(input);
 
-    expect(result.id).toEqual(templateId);
-    expect(result.name).toEqual('Completely Updated Template');
-    expect(result.content).toEqual('New content with {customer_name}');
-    expect(result.variables).toEqual(['customer_name']);
+    expect(result.id).toEqual(testTemplateId);
+    expect(result.name).toEqual('Welcome Message');
+    expect(result.content).toEqual('Welcome {{firstName}} {{lastName}}!');
+    expect(result.variables).toEqual(['firstName', 'lastName']);
     expect(result.updated_at).toBeInstanceOf(Date);
   });
 
   it('should set variables to null', async () => {
     const input: UpdateMessageTemplateInput = {
-      id: templateId,
+      id: testTemplateId,
       variables: null
     };
 
@@ -111,23 +113,24 @@ describe('updateMessageTemplate', () => {
     expect(result.variables).toBeNull();
   });
 
-  it('should save updates to database', async () => {
+  it('should save changes to database', async () => {
     const input: UpdateMessageTemplateInput = {
-      id: templateId,
+      id: testTemplateId,
       name: 'Database Test Template',
-      content: 'Database test content'
+      content: 'Testing database persistence'
     };
 
     await updateMessageTemplate(input);
 
+    // Verify changes were saved to database
     const templates = await db.select()
       .from(messageTemplatesTable)
-      .where(eq(messageTemplatesTable.id, templateId))
+      .where(eq(messageTemplatesTable.id, testTemplateId))
       .execute();
 
     expect(templates).toHaveLength(1);
     expect(templates[0].name).toEqual('Database Test Template');
-    expect(templates[0].content).toEqual('Database test content');
+    expect(templates[0].content).toEqual('Testing database persistence');
     expect(templates[0].updated_at).toBeInstanceOf(Date);
   });
 
@@ -140,22 +143,22 @@ describe('updateMessageTemplate', () => {
     expect(updateMessageTemplate(input)).rejects.toThrow(/not found/i);
   });
 
-  it('should update timestamp on every update', async () => {
+  it('should update only updated_at when no other fields provided', async () => {
     const originalTemplate = await db.select()
       .from(messageTemplatesTable)
-      .where(eq(messageTemplatesTable.id, templateId))
+      .where(eq(messageTemplatesTable.id, testTemplateId))
       .execute();
 
-    // Wait a small amount to ensure timestamp difference
-    await new Promise(resolve => setTimeout(resolve, 10));
-
     const input: UpdateMessageTemplateInput = {
-      id: templateId,
-      name: 'Timestamp Test'
+      id: testTemplateId
     };
 
     const result = await updateMessageTemplate(input);
 
-    expect(result.updated_at.getTime()).toBeGreaterThan(originalTemplate[0].updated_at.getTime());
+    expect(result.name).toEqual(originalTemplate[0].name);
+    expect(result.content).toEqual(originalTemplate[0].content);
+    expect(result.variables).toEqual(originalTemplate[0].variables as string[] | null);
+    expect(result.updated_at).toBeInstanceOf(Date);
+    expect(result.updated_at > originalTemplate[0].updated_at).toBe(true);
   });
 });

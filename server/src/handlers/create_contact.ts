@@ -4,16 +4,16 @@ import { contactsTable, usersTable } from '../db/schema';
 import { type CreateContactInput, type Contact } from '../schema';
 import { eq } from 'drizzle-orm';
 
-export const createContact = async (input: CreateContactInput): Promise<Contact> => {
+export async function createContact(input: CreateContactInput): Promise<Contact> {
   try {
-    // Verify that the user exists before creating the contact
+    // Verify that the user exists
     const userExists = await db.select()
       .from(usersTable)
       .where(eq(usersTable.id, input.user_id))
       .execute();
 
     if (userExists.length === 0) {
-      throw new Error(`User with id ${input.user_id} not found`);
+      throw new Error(`User with id ${input.user_id} does not exist`);
     }
 
     // Insert contact record
@@ -34,4 +34,4 @@ export const createContact = async (input: CreateContactInput): Promise<Contact>
     console.error('Contact creation failed:', error);
     throw error;
   }
-};
+}

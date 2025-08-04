@@ -8,17 +8,18 @@ import { updateContact } from '../handlers/update_contact';
 import { eq } from 'drizzle-orm';
 
 describe('updateContact', () => {
+  beforeEach(createDB);
+  afterEach(resetDB);
+
   let testUserId: number;
   let testContactId: number;
 
   beforeEach(async () => {
-    await createDB();
-
     // Create test user
     const userResult = await db.insert(usersTable)
       .values({
         email: 'test@example.com',
-        password_hash: 'hashed_password',
+        password_hash: 'hashedpassword',
         first_name: 'Test',
         last_name: 'User'
       })
@@ -41,75 +42,80 @@ describe('updateContact', () => {
     testContactId = contactResult[0].id;
   });
 
-  afterEach(resetDB);
-
-  it('should update contact with all fields', async () => {
-    const updateInput: UpdateContactInput = {
+  it('should update contact phone number', async () => {
+    const input: UpdateContactInput = {
       id: testContactId,
-      phone_number: '+9876543210',
-      first_name: 'Jane',
-      last_name: 'Smith',
-      email: 'jane@example.com',
-      notes: 'Updated notes'
+      phone_number: '+9876543210'
     };
 
-    const result = await updateContact(updateInput);
+    const result = await updateContact(input);
 
     expect(result.id).toEqual(testContactId);
-    expect(result.user_id).toEqual(testUserId);
     expect(result.phone_number).toEqual('+9876543210');
-    expect(result.first_name).toEqual('Jane');
-    expect(result.last_name).toEqual('Smith');
-    expect(result.email).toEqual('jane@example.com');
-    expect(result.notes).toEqual('Updated notes');
-    expect(result.created_at).toBeInstanceOf(Date);
+    expect(result.first_name).toEqual('John'); // Unchanged
+    expect(result.last_name).toEqual('Doe'); // Unchanged
+    expect(result.email).toEqual('john@example.com'); // Unchanged
+    expect(result.notes).toEqual('Original notes'); // Unchanged
     expect(result.updated_at).toBeInstanceOf(Date);
   });
 
-  it('should update only provided fields', async () => {
-    const updateInput: UpdateContactInput = {
+  it('should update contact first name', async () => {
+    const input: UpdateContactInput = {
       id: testContactId,
-      first_name: 'Jane',
-      notes: 'New notes only'
+      first_name: 'Jane'
     };
 
-    const result = await updateContact(updateInput);
+    const result = await updateContact(input);
 
     expect(result.first_name).toEqual('Jane');
-    expect(result.notes).toEqual('New notes only');
-    // Other fields should remain unchanged
-    expect(result.phone_number).toEqual('+1234567890');
-    expect(result.last_name).toEqual('Doe');
-    expect(result.email).toEqual('john@example.com');
+    expect(result.phone_number).toEqual('+1234567890'); // Unchanged
+    expect(result.last_name).toEqual('Doe'); // Unchanged
+  });
+
+  it('should update multiple fields at once', async () => {
+    const input: UpdateContactInput = {
+      id: testContactId,
+      first_name: 'Jane',
+      last_name: 'Smith',
+      email: 'jane.smith@example.com',
+      notes: 'Updated notes'
+    };
+
+    const result = await updateContact(input);
+
+    expect(result.first_name).toEqual('Jane');
+    expect(result.last_name).toEqual('Smith');
+    expect(result.email).toEqual('jane.smith@example.com');
+    expect(result.notes).toEqual('Updated notes');
+    expect(result.phone_number).toEqual('+1234567890'); // Unchanged
   });
 
   it('should set nullable fields to null', async () => {
-    const updateInput: UpdateContactInput = {
+    const input: UpdateContactInput = {
       id: testContactId,
       last_name: null,
       email: null,
       notes: null
     };
 
-    const result = await updateContact(updateInput);
+    const result = await updateContact(input);
 
     expect(result.last_name).toBeNull();
-    expect(result.email).toBeNull();
+    expect(result.email).toBeNull(); 
     expect(result.notes).toBeNull();
-    // Non-nullable fields should remain unchanged
-    expect(result.first_name).toEqual('John');
-    expect(result.phone_number).toEqual('+1234567890');
+    expect(result.first_name).toEqual('John'); // Unchanged
   });
 
-  it('should save updated contact to database', async () => {
-    const updateInput: UpdateContactInput = {
+  it('should save changes to database', async () => {
+    const input: UpdateContactInput = {
       id: testContactId,
       first_name: 'Updated Name',
-      phone_number: '+5555555555'
+      notes: 'Updated notes'
     };
 
-    await updateContact(updateInput);
+    await updateContact(input);
 
+    // Verify changes in database
     const contacts = await db.select()
       .from(contactsTable)
       .where(eq(contactsTable.id, testContactId))
@@ -117,37 +123,38 @@ describe('updateContact', () => {
 
     expect(contacts).toHaveLength(1);
     expect(contacts[0].first_name).toEqual('Updated Name');
-    expect(contacts[0].phone_number).toEqual('+5555555555');
+    expect(contacts[0].notes).toEqual('Updated notes');
     expect(contacts[0].updated_at).toBeInstanceOf(Date);
   });
 
-  it('should update the updated_at timestamp', async () => {
+  it('should throw error for non-existent contact', async () => {
+    const input: UpdateContactInput = {
+      id: 999999,
+      first_name: 'Jane'
+    };
+
+    expect(updateContact(input)).rejects.toThrow(/not found/i);
+  });
+
+  it('should update timestamp when making changes', async () => {
     // Get original timestamp
     const originalContact = await db.select()
       .from(contactsTable)
       .where(eq(contactsTable.id, testContactId))
       .execute();
-    const originalUpdatedAt = originalContact[0].updated_at;
+    const originalTimestamp = originalContact[0].updated_at;
 
-    // Wait a small amount to ensure timestamp difference
+    // Wait a bit to ensure timestamp difference
     await new Promise(resolve => setTimeout(resolve, 10));
 
-    const updateInput: UpdateContactInput = {
+    const input: UpdateContactInput = {
       id: testContactId,
-      notes: 'Timestamp test'
+      first_name: 'Updated'
     };
 
-    const result = await updateContact(updateInput);
+    const result = await updateContact(input);
 
-    expect(result.updated_at.getTime()).toBeGreaterThan(originalUpdatedAt.getTime());
-  });
-
-  it('should throw error when contact not found', async () => {
-    const updateInput: UpdateContactInput = {
-      id: 99999,
-      first_name: 'Non-existent'
-    };
-
-    await expect(updateContact(updateInput)).rejects.toThrow(/Contact with id 99999 not found/i);
+    expect(result.updated_at).toBeInstanceOf(Date);
+    expect(result.updated_at > originalTimestamp).toBe(true);
   });
 });

@@ -21,7 +21,7 @@ export async function sendMessage(input: SendMessageInput): Promise<Message> {
 
     let messageContent = input.content;
 
-    // If template_id is provided, fetch and use the template
+    // If template_id is provided, fetch and use template content
     if (input.template_id) {
       const templates = await db.select()
         .from(messageTemplatesTable)
@@ -38,7 +38,7 @@ export async function sendMessage(input: SendMessageInput): Promise<Message> {
       messageContent = templates[0].content;
     }
 
-    // Store message in database
+    // Create outbound message record
     const result = await db.insert(messagesTable)
       .values({
         user_id: input.user_id,

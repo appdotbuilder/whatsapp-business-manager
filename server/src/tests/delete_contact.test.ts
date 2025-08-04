@@ -3,19 +3,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { resetDB, createDB } from '../helpers';
 import { db } from '../db';
 import { usersTable, contactsTable } from '../db/schema';
-import { deleteContact } from '../handlers/delete_contact';
 import { eq } from 'drizzle-orm';
+import { deleteContact } from '../handlers/delete_contact';
 
 describe('deleteContact', () => {
   beforeEach(createDB);
   afterEach(resetDB);
 
-  it('should delete an existing contact', async () => {
-    // Create test user first
+  it('should delete an existing contact and return true', async () => {
+    // Create a user first
     const userResult = await db.insert(usersTable)
       .values({
         email: 'test@example.com',
-        password_hash: 'hashed_password',
+        password_hash: 'hashedpassword',
         first_name: 'Test',
         last_name: 'User'
       })
@@ -24,7 +24,7 @@ describe('deleteContact', () => {
 
     const userId = userResult[0].id;
 
-    // Create test contact
+    // Create a contact
     const contactResult = await db.insert(contactsTable)
       .values({
         user_id: userId,
@@ -44,7 +44,7 @@ describe('deleteContact', () => {
 
     expect(result).toBe(true);
 
-    // Verify contact was deleted
+    // Verify contact is deleted from database
     const contacts = await db.select()
       .from(contactsTable)
       .where(eq(contactsTable.id, contactId))
@@ -53,18 +53,20 @@ describe('deleteContact', () => {
     expect(contacts).toHaveLength(0);
   });
 
-  it('should return false for non-existent contact', async () => {
-    const result = await deleteContact(999);
+  it('should return false when contact does not exist', async () => {
+    const nonExistentId = 999999;
+
+    const result = await deleteContact(nonExistentId);
 
     expect(result).toBe(false);
   });
 
   it('should not affect other contacts when deleting one', async () => {
-    // Create test user first
+    // Create a user first
     const userResult = await db.insert(usersTable)
       .values({
         email: 'test@example.com',
-        password_hash: 'hashed_password',
+        password_hash: 'hashedpassword',
         first_name: 'Test',
         last_name: 'User'
       })
@@ -73,8 +75,8 @@ describe('deleteContact', () => {
 
     const userId = userResult[0].id;
 
-    // Create two test contacts
-    const contactsResult = await db.insert(contactsTable)
+    // Create two contacts
+    const contactResults = await db.insert(contactsTable)
       .values([
         {
           user_id: userId,
@@ -92,17 +94,18 @@ describe('deleteContact', () => {
       .returning()
       .execute();
 
-    const [contact1, contact2] = contactsResult;
+    const contact1Id = contactResults[0].id;
+    const contact2Id = contactResults[1].id;
 
-    // Delete the first contact
-    const result = await deleteContact(contact1.id);
+    // Delete first contact
+    const result = await deleteContact(contact1Id);
 
     expect(result).toBe(true);
 
-    // Verify first contact was deleted
+    // Verify first contact is deleted
     const deletedContact = await db.select()
       .from(contactsTable)
-      .where(eq(contactsTable.id, contact1.id))
+      .where(eq(contactsTable.id, contact1Id))
       .execute();
 
     expect(deletedContact).toHaveLength(0);
@@ -110,7 +113,7 @@ describe('deleteContact', () => {
     // Verify second contact still exists
     const remainingContact = await db.select()
       .from(contactsTable)
-      .where(eq(contactsTable.id, contact2.id))
+      .where(eq(contactsTable.id, contact2Id))
       .execute();
 
     expect(remainingContact).toHaveLength(1);

@@ -14,7 +14,7 @@ export async function getMessageTemplates(userId: number): Promise<MessageTempla
 
     return results.map(template => ({
       ...template,
-      variables: template.variables as string[] | null // Cast JSONB to proper type
+      variables: template.variables as string[] | null // Cast jsonb to proper type
     }));
   } catch (error) {
     console.error('Failed to fetch message templates:', error);
