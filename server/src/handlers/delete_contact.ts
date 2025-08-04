@@ -1,9 +1,18 @@
 
-import { type Contact } from '../schema';
+import { db } from '../db';
+import { contactsTable } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 export async function deleteContact(contactId: number): Promise<boolean> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is to delete a contact by ID from the database
-    // and return true if successful, false if contact not found.
-    return Promise.resolve(true);
+  try {
+    const result = await db.delete(contactsTable)
+      .where(eq(contactsTable.id, contactId))
+      .returning({ id: contactsTable.id })
+      .execute();
+
+    return result.length > 0;
+  } catch (error) {
+    console.error('Contact deletion failed:', error);
+    throw error;
+  }
 }

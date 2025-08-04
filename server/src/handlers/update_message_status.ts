@@ -1,19 +1,28 @@
 
+import { db } from '../db';
+import { messagesTable } from '../db/schema';
 import { type UpdateMessageStatusInput, type Message } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function updateMessageStatus(input: UpdateMessageStatusInput): Promise<Message> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is to update the delivery status of a message,
-    // typically called from WhatsApp webhook when status changes occur.
-    return Promise.resolve({
-        id: input.id,
-        user_id: 1, // Placeholder user ID
-        contact_id: 1, // Placeholder contact ID
-        content: 'Message content',
-        is_outbound: true,
+export const updateMessageStatus = async (input: UpdateMessageStatusInput): Promise<Message> => {
+  try {
+    // Update message status and updated_at timestamp
+    const result = await db.update(messagesTable)
+      .set({
         status: input.status,
-        whatsapp_message_id: 'wa_msg_placeholder',
-        created_at: new Date(),
         updated_at: new Date()
-    } as Message);
-}
+      })
+      .where(eq(messagesTable.id, input.id))
+      .returning()
+      .execute();
+
+    if (result.length === 0) {
+      throw new Error(`Message with id ${input.id} not found`);
+    }
+
+    return result[0];
+  } catch (error) {
+    console.error('Message status update failed:', error);
+    throw error;
+  }
+};

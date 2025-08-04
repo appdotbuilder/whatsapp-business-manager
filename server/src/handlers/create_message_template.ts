@@ -1,17 +1,28 @@
 
+import { db } from '../db';
+import { messageTemplatesTable } from '../db/schema';
 import { type CreateMessageTemplateInput, type MessageTemplate } from '../schema';
 
-export async function createMessageTemplate(input: CreateMessageTemplateInput): Promise<MessageTemplate> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is to create a new reusable message template
-    // for the specified user and persist it in the database.
-    return Promise.resolve({
-        id: 0, // Placeholder ID
+export const createMessageTemplate = async (input: CreateMessageTemplateInput): Promise<MessageTemplate> => {
+  try {
+    // Insert message template record
+    const result = await db.insert(messageTemplatesTable)
+      .values({
         user_id: input.user_id,
         name: input.name,
         content: input.content,
-        variables: input.variables || null,
-        created_at: new Date(),
-        updated_at: new Date()
-    } as MessageTemplate);
-}
+        variables: input.variables || null
+      })
+      .returning()
+      .execute();
+
+    const messageTemplate = result[0];
+    return {
+      ...messageTemplate,
+      variables: messageTemplate.variables as string[] | null // Cast jsonb back to proper type
+    };
+  } catch (error) {
+    console.error('Message template creation failed:', error);
+    throw error;
+  }
+};

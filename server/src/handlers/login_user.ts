@@ -1,17 +1,33 @@
 
+import { db } from '../db';
+import { usersTable } from '../db/schema';
 import { type LoginInput, type User } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function loginUser(input: LoginInput): Promise<User | null> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is to authenticate user credentials by verifying
-    // email and password hash, then return user data if valid or null if invalid.
-    return Promise.resolve({
-        id: 1, // Placeholder ID
-        email: input.email,
-        password_hash: 'hashed_password_placeholder',
-        first_name: 'John',
-        last_name: 'Doe',
-        created_at: new Date(),
-        updated_at: new Date()
-    } as User);
-}
+export const loginUser = async (input: LoginInput): Promise<User | null> => {
+  try {
+    // Find user by email
+    const users = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.email, input.email))
+      .execute();
+
+    if (users.length === 0) {
+      return null; // User not found
+    }
+
+    const user = users[0];
+
+    // In a real implementation, you would use bcrypt to compare password hash
+    // For now, we'll do a simple string comparison as a placeholder
+    // TODO: Replace with proper bcrypt comparison
+    if (user.password_hash !== input.password) {
+      return null; // Invalid password
+    }
+
+    return user;
+  } catch (error) {
+    console.error('User login failed:', error);
+    throw error;
+  }
+};

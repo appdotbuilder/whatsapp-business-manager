@@ -1,9 +1,31 @@
 
+import { db } from '../db';
+import { contactsTable } from '../db/schema';
 import { type Contact } from '../schema';
+import { eq, desc } from 'drizzle-orm';
 
 export async function getContacts(userId: number): Promise<Contact[]> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is to fetch all contacts belonging to the specified user
-    // from the database, ordered by creation date or name.
-    return Promise.resolve([]);
+  try {
+    const results = await db.select()
+      .from(contactsTable)
+      .where(eq(contactsTable.user_id, userId))
+      .orderBy(desc(contactsTable.created_at))
+      .execute();
+
+    // Convert results to match Contact schema
+    return results.map(contact => ({
+      id: contact.id,
+      user_id: contact.user_id,
+      phone_number: contact.phone_number,
+      first_name: contact.first_name,
+      last_name: contact.last_name,
+      email: contact.email,
+      notes: contact.notes,
+      created_at: contact.created_at,
+      updated_at: contact.updated_at
+    }));
+  } catch (error) {
+    console.error('Failed to get contacts:', error);
+    throw error;
+  }
 }
